@@ -1,11 +1,22 @@
 #!/bin/ash
 
-# Утилита для отлова DNS-доменов из dnsmasq logs для дальнейшего добавления в Podkop.
+# Утилита для сбора DNS-доменов из dnsmasq logs для дальнейшего добавления в Podkop.
 # Совместимо с OpenWrt BusyBox ash. Не использует bash-specific синтаксис.
 
 LOG_FILE="/tmp/podkop-domain-capture.log"
 PREV_FILE="/tmp/podkop-domain-capture.logqueries.prev"
 LEASES_FILE="/tmp/dhcp.leases"
+CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
+LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
+
+ESC_CHAR="$(printf '\033')"
+CR_CHAR="$(printf '\r')"
+TTY_STATE=""
+MENU_CHOICE=""
+SELECTED_IPS=""
+SELECTED_LOG_IP=""
+CAPTURE_ALL_SELECTED="0"
+CAPTURE_MESSAGE=""
 
 # Отключаем pathname expansion, чтобы домены/строки логов не раскрывались как glob.
 set -f
@@ -29,18 +40,8 @@ ensure_interactive_input() {
 	exit 1
 }
 
-show_menu() {
-	echo
-	echo "=== Podkop Domain Capture ==="
-	echo "1) Показать DHCP leases"
-	echo "2) Ловить домены от одного IP"
-	echo "3) Ловить домены от двух IP"
-	echo "4) Ловить домены от всех клиентов"
-	echo "5) Показать уникальные домены из последнего лога"
-	echo "6) Показать уникальные домены по конкретному IP из последнего лога"
-	echo "7) Выключить dnsmasq logqueries и очистить временные логи"
-	echo "0) Выход"
-	echo
+clear_screen() {
+	printf '\033[H\033[J'
 }
 
 pause_enter() {
@@ -49,18 +50,156 @@ pause_enter() {
 	IFS= read -r DUMMY || return 0
 }
 
-show_leases() {
-	echo
-	echo "DHCP leases:"
+tui_start() {
+	TTY_STATE="$(stty -g 2>/dev/null)"
+	if [ -z "$TTY_STATE" ]; then
+		echo "Ошибка: не удалось получить настройки терминала."
+		return 1
+	fi
 
+	if ! stty -echo -icanon min 1 time 0 2>/dev/null; then
+		echo "Ошибка: не удалось включить интерактивный режим терминала."
+		return 1
+	fi
+
+	printf '\033[?25l'
+	trap 'tui_stop; echo; exit 130' INT TERM HUP
+	return 0
+}
+
+tui_stop() {
+	if [ -n "$TTY_STATE" ]; then
+		stty "$TTY_STATE" 2>/dev/null
+		TTY_STATE=""
+	fi
+
+	printf '\033[?25h'
+	trap - INT TERM HUP
+}
+
+read_key() {
+	KEY1="$(dd bs=1 count=1 2>/dev/null)"
+
+	if [ "$KEY1" = "$ESC_CHAR" ]; then
+		stty -echo -icanon min 0 time 1 2>/dev/null
+		KEY2="$(dd bs=1 count=1 2>/dev/null)"
+		KEY3="$(dd bs=1 count=1 2>/dev/null)"
+		stty -echo -icanon min 1 time 0 2>/dev/null
+
+		case "$KEY2$KEY3" in
+			"[A") echo "up" ;;
+			"[B") echo "down" ;;
+			*) echo "quit" ;;
+		esac
+		return
+	fi
+
+	case "$KEY1" in
+		"") echo "enter" ;;
+		"$CR_CHAR") echo "enter" ;;
+		" ") echo "space" ;;
+		q|Q) echo "quit" ;;
+		*) echo "other" ;;
+	esac
+}
+
+render_menu_line() {
+	CURRENT="$1"
+	TEXT="$2"
+
+	if [ "$CURRENT" = "1" ]; then
+		printf '\033[7m> %s\033[0m\n' "$TEXT"
+	else
+		printf '  %s\n' "$TEXT"
+	fi
+}
+
+render_main_menu() {
+	clear_screen
+	echo "=== Podkop Domain Capture ==="
+	echo "Стрелки вверх/вниз - выбор, Enter - открыть, q - выход"
+	echo
+
+	if [ "$1" -eq 1 ]; then
+		render_menu_line 1 "Собрать домены"
+	else
+		render_menu_line 0 "Собрать домены"
+	fi
+
+	if [ "$1" -eq 2 ]; then
+		render_menu_line 1 "Показать домены из последнего лога"
+	else
+		render_menu_line 0 "Показать домены из последнего лога"
+	fi
+
+	if [ "$1" -eq 3 ]; then
+		render_menu_line 1 "Показать домены по клиенту из последнего лога"
+	else
+		render_menu_line 0 "Показать домены по клиенту из последнего лога"
+	fi
+
+	if [ "$1" -eq 4 ]; then
+		render_menu_line 1 "Отключить logqueries и очистить временные логи"
+	else
+		render_menu_line 0 "Отключить logqueries и очистить временные логи"
+	fi
+
+	if [ "$1" -eq 5 ]; then
+		render_menu_line 1 "Выход"
+	else
+		render_menu_line 0 "Выход"
+	fi
+}
+
+select_main_menu() {
+	MENU_INDEX="1"
+	MENU_MAX="5"
+	MENU_CHOICE=""
+
+	tui_start || return 1
+
+	while :; do
+		render_main_menu "$MENU_INDEX"
+		KEY="$(read_key)"
+
+		case "$KEY" in
+			up)
+				MENU_INDEX=$((MENU_INDEX - 1))
+				if [ "$MENU_INDEX" -lt 1 ]; then
+					MENU_INDEX="$MENU_MAX"
+				fi
+				;;
+			down)
+				MENU_INDEX=$((MENU_INDEX + 1))
+				if [ "$MENU_INDEX" -gt "$MENU_MAX" ]; then
+					MENU_INDEX="1"
+				fi
+				;;
+			enter)
+				MENU_CHOICE="$MENU_INDEX"
+				tui_stop
+				clear_screen
+				return 0
+				;;
+			quit)
+				MENU_CHOICE="5"
+				tui_stop
+				clear_screen
+				return 0
+				;;
+		esac
+	done
+}
+
+load_clients() {
 	if [ ! -s "$LEASES_FILE" ]; then
-		echo "Файл $LEASES_FILE не найден или пуст."
+		: > "$CLIENTS_FILE"
 		return
 	fi
 
 	# На OpenWrt /tmp/dhcp.leases имеет формат:
 	# expires_epoch mac ip hostname client_id
-	cat "$LEASES_FILE" | awk '
+	awk '
 	function remaining(expire, left, d, h, m, s) {
 		if (expire == 0) {
 			return "never"
@@ -89,16 +228,222 @@ show_leases() {
 	}
 	BEGIN {
 		now = systime()
-		printf "%-15s %-17s %-24s %s\n", "IP", "MAC", "HOSTNAME", "REMAINING"
-		printf "%-15s %-17s %-24s %s\n", "---------------", "-----------------", "------------------------", "---------"
 	}
 	{
 		host = $4
 		if (host == "" || host == "*") {
 			host = "-"
 		}
-		printf "%-15s %-17s %-24s %s\n", $3, $2, host, remaining($1)
-	}'
+		printf "%s|%s|%s|%s\n", $3, $2, host, remaining($1)
+	}' "$LEASES_FILE" > "$CLIENTS_FILE"
+}
+
+client_count() {
+	awk 'END { print NR + 0 }' "$CLIENTS_FILE"
+}
+
+get_client_line() {
+	sed -n "${1}p" "$CLIENTS_FILE"
+}
+
+split_client_line() {
+	OLD_IFS="$IFS"
+	IFS="|"
+	set -- $1
+	IFS="$OLD_IFS"
+
+	CLIENT_IP="$1"
+	CLIENT_MAC="$2"
+	CLIENT_HOST="$3"
+	CLIENT_REMAINING="$4"
+}
+
+is_ip_selected() {
+	for CHECK_IP in $SELECTED_IPS; do
+		if [ "$CHECK_IP" = "$1" ]; then
+			return 0
+		fi
+	done
+	return 1
+}
+
+toggle_ip_selection() {
+	TOGGLE_IP="$1"
+
+	if is_ip_selected "$TOGGLE_IP"; then
+		NEW_SELECTED=""
+		for CHECK_IP in $SELECTED_IPS; do
+			if [ "$CHECK_IP" != "$TOGGLE_IP" ]; then
+				NEW_SELECTED="$NEW_SELECTED $CHECK_IP"
+			fi
+		done
+		SELECTED_IPS="$NEW_SELECTED"
+	else
+		SELECTED_IPS="$SELECTED_IPS $TOGGLE_IP"
+	fi
+
+	CAPTURE_ALL_SELECTED="0"
+}
+
+toggle_all_clients() {
+	if [ "$CAPTURE_ALL_SELECTED" = "1" ]; then
+		CAPTURE_ALL_SELECTED="0"
+	else
+		CAPTURE_ALL_SELECTED="1"
+		SELECTED_IPS=""
+	fi
+}
+
+render_capture_menu() {
+	CAPTURE_INDEX="$1"
+	CLIENT_TOTAL="$2"
+	START_INDEX=$((CLIENT_TOTAL + 2))
+	BACK_INDEX=$((CLIENT_TOTAL + 3))
+
+	clear_screen
+	echo "=== Сбор доменов ==="
+	echo "Стрелки - выбор, Space/Enter - отметить клиента, Enter на действии - подтвердить, q - назад"
+	echo
+
+	if [ "$CLIENT_TOTAL" -eq 0 ]; then
+		echo "DHCP leases не найдены или пусты. Можно выбрать сбор от всех клиентов."
+		echo
+	fi
+
+	if [ "$CAPTURE_ALL_SELECTED" = "1" ]; then
+		CHECK="[x]"
+	else
+		CHECK="[ ]"
+	fi
+
+	if [ "$CAPTURE_INDEX" -eq 1 ]; then
+		render_menu_line 1 "$CHECK Все клиенты"
+	else
+		render_menu_line 0 "$CHECK Все клиенты"
+	fi
+
+	I="1"
+	while [ "$I" -le "$CLIENT_TOTAL" ]; do
+		LINE="$(get_client_line "$I")"
+		split_client_line "$LINE"
+
+		if is_ip_selected "$CLIENT_IP"; then
+			CHECK="[x]"
+		else
+			CHECK="[ ]"
+		fi
+
+		DISPLAY="$CHECK $CLIENT_IP  $CLIENT_HOST  $CLIENT_MAC  $CLIENT_REMAINING"
+		ROW_INDEX=$((I + 1))
+
+		if [ "$CAPTURE_INDEX" -eq "$ROW_INDEX" ]; then
+			render_menu_line 1 "$DISPLAY"
+		else
+			render_menu_line 0 "$DISPLAY"
+		fi
+
+		I=$((I + 1))
+	done
+
+	echo
+	if [ "$CAPTURE_INDEX" -eq "$START_INDEX" ]; then
+		render_menu_line 1 "Начать сбор доменов"
+	else
+		render_menu_line 0 "Начать сбор доменов"
+	fi
+
+	if [ "$CAPTURE_INDEX" -eq "$BACK_INDEX" ]; then
+		render_menu_line 1 "Назад"
+	else
+		render_menu_line 0 "Назад"
+	fi
+
+	if [ -n "$CAPTURE_MESSAGE" ]; then
+		echo
+		echo "$CAPTURE_MESSAGE"
+	fi
+}
+
+select_capture_targets() {
+	load_clients
+
+	CLIENT_TOTAL="$(client_count)"
+	CAPTURE_INDEX="1"
+	CAPTURE_MAX=$((CLIENT_TOTAL + 3))
+	CAPTURE_ALL_SELECTED="0"
+	SELECTED_IPS=""
+	CAPTURE_MESSAGE=""
+
+	tui_start || return 1
+
+	while :; do
+		START_INDEX=$((CLIENT_TOTAL + 2))
+		BACK_INDEX=$((CLIENT_TOTAL + 3))
+
+		render_capture_menu "$CAPTURE_INDEX" "$CLIENT_TOTAL"
+		KEY="$(read_key)"
+		CAPTURE_MESSAGE=""
+
+		case "$KEY" in
+			up)
+				CAPTURE_INDEX=$((CAPTURE_INDEX - 1))
+				if [ "$CAPTURE_INDEX" -lt 1 ]; then
+					CAPTURE_INDEX="$CAPTURE_MAX"
+				fi
+				;;
+			down)
+				CAPTURE_INDEX=$((CAPTURE_INDEX + 1))
+				if [ "$CAPTURE_INDEX" -gt "$CAPTURE_MAX" ]; then
+					CAPTURE_INDEX="1"
+				fi
+				;;
+			space|enter)
+				if [ "$CAPTURE_INDEX" -eq 1 ]; then
+					toggle_all_clients
+					continue
+				fi
+
+				if [ "$CAPTURE_INDEX" -gt 1 ] && [ "$CAPTURE_INDEX" -le $((CLIENT_TOTAL + 1)) ]; then
+					CLIENT_ROW=$((CAPTURE_INDEX - 1))
+					LINE="$(get_client_line "$CLIENT_ROW")"
+					split_client_line "$LINE"
+					toggle_ip_selection "$CLIENT_IP"
+					continue
+				fi
+
+				if [ "$KEY" = "space" ]; then
+					continue
+				fi
+
+				if [ "$CAPTURE_INDEX" -eq "$START_INDEX" ]; then
+					if [ "$CAPTURE_ALL_SELECTED" != "1" ] && [ -z "$SELECTED_IPS" ]; then
+						CAPTURE_MESSAGE="Выберите хотя бы одного клиента или пункт Все клиенты."
+						continue
+					fi
+
+					tui_stop
+					clear_screen
+					if [ "$CAPTURE_ALL_SELECTED" = "1" ]; then
+						start_capture "all" ""
+					else
+						start_capture "selected" "$SELECTED_IPS"
+					fi
+					return 0
+				fi
+
+				if [ "$CAPTURE_INDEX" -eq "$BACK_INDEX" ]; then
+					tui_stop
+					clear_screen
+					return 0
+				fi
+				;;
+			quit)
+				tui_stop
+				clear_screen
+				return 0
+				;;
+		esac
+	done
 }
 
 enable_logs() {
@@ -202,6 +547,59 @@ parse_query_line() {
 	return 0
 }
 
+client_allowed() {
+	if [ "$1" = "all" ]; then
+		return 0
+	fi
+
+	for FILTER_IP in $2; do
+		if [ "$CAP_CLIENT" = "$FILTER_IP" ]; then
+			return 0
+		fi
+	done
+
+	return 1
+}
+
+capture_stream() {
+	MODE="$1"
+	IP_LIST="$2"
+
+	if ! : > "$LOG_FILE"; then
+		echo "Ошибка: не удалось создать файл $LOG_FILE."
+		return 1
+	fi
+
+	echo
+	echo "Сбор доменов запущен. Нажмите Ctrl+C, чтобы остановить."
+	echo "Лог сохраняется в: $LOG_FILE"
+	echo
+	echo "TIME     CLIENT_IP       DOMAIN"
+	echo "-------- --------------- ------------------------------"
+
+	trap 'echo; echo "Останавливаю live-сбор..."' INT
+
+	logread -f -e dnsmasq | while IFS= read -r LINE; do
+		if ! parse_query_line "$LINE"; then
+			continue
+		fi
+
+		if ! client_allowed "$MODE" "$IP_LIST"; then
+			continue
+		fi
+
+		printf "%s %s %s\n" "$CAP_TIME" "$CAP_CLIENT" "$CAP_DOMAIN"
+		printf "%s %s %s\n" "$CAP_TIME" "$CAP_CLIENT" "$CAP_DOMAIN" >> "$LOG_FILE"
+	done
+
+	trap - INT
+
+	echo
+	echo "Сбор остановлен."
+	echo "Лог сохранен: $LOG_FILE"
+	return 0
+}
+
 ask_show_unique() {
 	echo
 	printf "Вывести уникальные домены из сохраненного лога? [y/N]: "
@@ -215,109 +613,25 @@ ask_show_unique() {
 			show_unique
 			;;
 		*)
-			echo "Ок, можно посмотреть позже через пункт меню 5 или 6."
+			echo "Ок, можно посмотреть позже из главного меню."
 			;;
 	esac
 }
 
-capture_stream() {
+start_capture() {
 	MODE="$1"
-	IP1="$2"
-	IP2="$3"
+	IP_LIST="$2"
 
-	if ! : > "$LOG_FILE"; then
-		echo "Ошибка: не удалось создать файл $LOG_FILE."
+	if ! enable_logs; then
+		pause_enter
 		return 1
 	fi
-
-	echo
-	echo "Отлов запущен. Нажмите Ctrl+C, чтобы остановить."
-	echo "Лог сохраняется в: $LOG_FILE"
-	echo
-	echo "TIME     CLIENT_IP       DOMAIN"
-	echo "-------- --------------- ------------------------------"
-
-	trap 'echo; echo "Останавливаю live-отлов..."' INT
-
-	logread -f -e dnsmasq | while IFS= read -r LINE; do
-		if ! parse_query_line "$LINE"; then
-			continue
-		fi
-
-		case "$MODE" in
-			one)
-				if [ "$CAP_CLIENT" != "$IP1" ]; then
-					continue
-				fi
-				;;
-			two)
-				if [ "$CAP_CLIENT" != "$IP1" ] && [ "$CAP_CLIENT" != "$IP2" ]; then
-					continue
-				fi
-				;;
-			all)
-				;;
-		esac
-
-		printf "%s %s %s\n" "$CAP_TIME" "$CAP_CLIENT" "$CAP_DOMAIN"
-		printf "%s %s %s\n" "$CAP_TIME" "$CAP_CLIENT" "$CAP_DOMAIN" >> "$LOG_FILE"
-	done
-
-	trap - INT
-
-	echo
-	echo "Отлов остановлен."
-	echo "Лог сохранен: $LOG_FILE"
+	capture_stream "$MODE" "$IP_LIST"
+	CAPTURE_RC="$?"
+	disable_logs
 	ask_show_unique
-	return 0
-}
-
-capture_one() {
-	echo
-	printf "Введите IP клиента: "
-	if ! IFS= read -r IP; then
-		echo
-		echo "Ввод недоступен."
-		return 1
-	fi
-
-	if [ -z "$IP" ]; then
-		echo "IP не указан."
-		return 1
-	fi
-
-	enable_logs || return 1
-	capture_stream "one" "$IP" ""
-}
-
-capture_two() {
-	echo
-	printf "Введите IP первого клиента: "
-	if ! IFS= read -r IP_FIRST; then
-		echo
-		echo "Ввод недоступен."
-		return 1
-	fi
-
-	printf "Введите IP второго клиента: "
-	if ! IFS= read -r IP_SECOND; then
-		echo
-		echo "Ввод недоступен."
-		return 1
-	fi
-
-	if [ -z "$IP_FIRST" ] || [ -z "$IP_SECOND" ]; then
-		echo "Один из IP не указан."
-		return 1
-	fi
-
-	enable_logs || return 1
-	capture_stream "two" "$IP_FIRST" "$IP_SECOND"
-}
-
-capture_all() {
-	enable_logs || return 1
-	capture_stream "all" "" ""
+	pause_enter
+	return "$CAPTURE_RC"
 }
 
 show_unique() {
@@ -333,28 +647,121 @@ show_unique() {
 	return 0
 }
 
-show_unique_by_ip() {
+build_log_ips() {
+	if [ ! -s "$LOG_FILE" ]; then
+		: > "$LOG_IPS_FILE"
+		return 1
+	fi
+
+	awk '{print $2}' "$LOG_FILE" | sort -u > "$LOG_IPS_FILE"
+	return 0
+}
+
+log_ip_count() {
+	awk 'END { print NR + 0 }' "$LOG_IPS_FILE"
+}
+
+get_log_ip() {
+	sed -n "${1}p" "$LOG_IPS_FILE"
+}
+
+render_log_ip_menu() {
+	LOG_IP_INDEX="$1"
+	LOG_IP_TOTAL="$2"
+	LOG_IP_BACK=$((LOG_IP_TOTAL + 1))
+
+	clear_screen
+	echo "=== Домены по клиенту ==="
+	echo "Стрелки - выбор, Enter - показать, q - назад"
 	echo
 
-	if [ ! -s "$LOG_FILE" ]; then
+	I="1"
+	while [ "$I" -le "$LOG_IP_TOTAL" ]; do
+		LOG_IP="$(get_log_ip "$I")"
+		if [ "$LOG_IP_INDEX" -eq "$I" ]; then
+			render_menu_line 1 "$LOG_IP"
+		else
+			render_menu_line 0 "$LOG_IP"
+		fi
+		I=$((I + 1))
+	done
+
+	echo
+	if [ "$LOG_IP_INDEX" -eq "$LOG_IP_BACK" ]; then
+		render_menu_line 1 "Назад"
+	else
+		render_menu_line 0 "Назад"
+	fi
+}
+
+select_log_ip() {
+	if ! build_log_ips; then
+		echo
 		echo "Лог $LOG_FILE не найден или пуст."
 		return 1
 	fi
 
-	printf "Введите IP клиента: "
-	if ! IFS= read -r IP; then
+	LOG_IP_TOTAL="$(log_ip_count)"
+	if [ "$LOG_IP_TOTAL" -eq 0 ]; then
 		echo
-		echo "Ввод недоступен."
+		echo "В последнем логе нет IP клиентов."
 		return 1
 	fi
 
-	if [ -z "$IP" ]; then
-		echo "IP не указан."
-		return 1
+	LOG_IP_INDEX="1"
+	LOG_IP_MAX=$((LOG_IP_TOTAL + 1))
+	SELECTED_LOG_IP=""
+
+	tui_start || return 1
+
+	while :; do
+		LOG_IP_BACK=$((LOG_IP_TOTAL + 1))
+		render_log_ip_menu "$LOG_IP_INDEX" "$LOG_IP_TOTAL"
+		KEY="$(read_key)"
+
+		case "$KEY" in
+			up)
+				LOG_IP_INDEX=$((LOG_IP_INDEX - 1))
+				if [ "$LOG_IP_INDEX" -lt 1 ]; then
+					LOG_IP_INDEX="$LOG_IP_MAX"
+				fi
+				;;
+			down)
+				LOG_IP_INDEX=$((LOG_IP_INDEX + 1))
+				if [ "$LOG_IP_INDEX" -gt "$LOG_IP_MAX" ]; then
+					LOG_IP_INDEX="1"
+				fi
+				;;
+			enter)
+				if [ "$LOG_IP_INDEX" -eq "$LOG_IP_BACK" ]; then
+					tui_stop
+					clear_screen
+					return 2
+				fi
+				SELECTED_LOG_IP="$(get_log_ip "$LOG_IP_INDEX")"
+				tui_stop
+				clear_screen
+				return 0
+				;;
+			quit)
+				tui_stop
+				clear_screen
+				return 2
+				;;
+		esac
+	done
+}
+
+show_unique_by_ip() {
+	select_log_ip
+	SELECT_LOG_IP_RC="$?"
+	if [ "$SELECT_LOG_IP_RC" -ne 0 ]; then
+		return "$SELECT_LOG_IP_RC"
 	fi
 
-	echo "Уникальные домены из последнего лога для $IP:"
-	awk -v ip="$IP" '$2==ip{print $3}' /tmp/podkop-domain-capture.log | sort -u
+	echo
+	echo "Уникальные домены из последнего лога для $SELECTED_LOG_IP:"
+	awk -v ip="$SELECTED_LOG_IP" '$2==ip{print $3}' /tmp/podkop-domain-capture.log | sort -u
 	return 0
 }
 
@@ -366,6 +773,8 @@ cleanup() {
 
 	rm -f "$LOG_FILE"
 	rm -f "$PREV_FILE"
+	rm -f "$CLIENTS_FILE"
+	rm -f "$LOG_IPS_FILE"
 
 	# Для удаления временных файлов по glob временно включаем pathname expansion.
 	set +f
@@ -384,52 +793,30 @@ cleanup() {
 ensure_interactive_input
 
 while :; do
-	show_menu
-	printf "Выберите пункт: "
-	if ! IFS= read -r CHOICE; then
-		echo
-		echo "Ввод недоступен или stdin закрыт."
-		echo "Если запускали через wget pipe, обновите install.sh или запустите напрямую:"
-		echo "/root/podkop-domain-capture.sh"
-		exit 1
-	fi
+	select_main_menu || exit 1
 
-	case "$CHOICE" in
+	case "$MENU_CHOICE" in
 		1)
-			show_leases
-			pause_enter
+			select_capture_targets
 			;;
 		2)
-			capture_one
-			pause_enter
-			;;
-		3)
-			capture_two
-			pause_enter
-			;;
-		4)
-			capture_all
-			pause_enter
-			;;
-		5)
 			show_unique
 			pause_enter
 			;;
-		6)
+		3)
 			show_unique_by_ip
-			pause_enter
+			SHOW_BY_IP_RC="$?"
+			if [ "$SHOW_BY_IP_RC" -ne 2 ]; then
+				pause_enter
+			fi
 			;;
-		7)
+		4)
 			cleanup
 			pause_enter
 			;;
-		0)
+		5)
 			echo "Выход."
 			exit 0
-			;;
-		*)
-			echo "Неизвестный пункт: $CHOICE"
-			pause_enter
 			;;
 	esac
 done
