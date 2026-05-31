@@ -8,6 +8,7 @@ PREV_FILE="/tmp/podkop-domain-capture.logqueries.prev"
 LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
+TTY_DEV="/dev/tty"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
@@ -23,12 +24,12 @@ CAPTURE_MESSAGE=""
 set -f
 
 ensure_interactive_input() {
-	if [ -t 0 ]; then
+	if [ -t 0 ] && [ -c "$TTY_DEV" ]; then
 		return 0
 	fi
 
-	if [ -c /dev/tty ]; then
-		exec < /dev/tty
+	if [ -c "$TTY_DEV" ]; then
+		exec < "$TTY_DEV"
 		if [ -t 0 ]; then
 			return 0
 		fi
@@ -52,11 +53,12 @@ pause_enter() {
 }
 
 tui_start() {
-	TTY_STATE="$(stty -g 2>/dev/null)"
+	TTY_STATE="$(stty -g < "$TTY_DEV" 2>/dev/null)"
 
-	if ! stty -echo -icanon min 1 time 0 2>/dev/null; then
-		if ! stty raw -echo 2>/dev/null; then
+	if ! stty -echo -icanon min 1 time 0 < "$TTY_DEV" 2>/dev/null; then
+		if ! stty raw -echo < "$TTY_DEV" 2>/dev/null; then
 			echo "Ошибка: не удалось включить интерактивный режим терминала."
+			echo "Проверьте, что запуск идет из обычного SSH-терминала с доступным /dev/tty."
 			return 1
 		fi
 	fi
@@ -69,14 +71,14 @@ tui_start() {
 
 tui_stop() {
 	if [ -n "$TTY_STATE" ]; then
-		if stty "$TTY_STATE" 2>/dev/null; then
+		if stty "$TTY_STATE" < "$TTY_DEV" 2>/dev/null; then
 			TTY_STATE=""
 			TTY_CHANGED="0"
 		fi
 	fi
 
 	if [ "$TTY_CHANGED" = "1" ]; then
-		stty sane 2>/dev/null || stty echo icanon 2>/dev/null
+		stty sane < "$TTY_DEV" 2>/dev/null || stty echo icanon < "$TTY_DEV" 2>/dev/null
 		TTY_STATE=""
 		TTY_CHANGED="0"
 	fi
@@ -86,13 +88,13 @@ tui_stop() {
 }
 
 read_key() {
-	KEY1="$(dd bs=1 count=1 2>/dev/null)"
+	KEY1="$(dd bs=1 count=1 < "$TTY_DEV" 2>/dev/null)"
 
 	if [ "$KEY1" = "$ESC_CHAR" ]; then
-		stty -echo -icanon min 0 time 1 2>/dev/null
-		KEY2="$(dd bs=1 count=1 2>/dev/null)"
-		KEY3="$(dd bs=1 count=1 2>/dev/null)"
-		stty -echo -icanon min 1 time 0 2>/dev/null
+		stty -echo -icanon min 0 time 1 < "$TTY_DEV" 2>/dev/null || stty raw -echo < "$TTY_DEV" 2>/dev/null
+		KEY2="$(dd bs=1 count=1 < "$TTY_DEV" 2>/dev/null)"
+		KEY3="$(dd bs=1 count=1 < "$TTY_DEV" 2>/dev/null)"
+		stty -echo -icanon min 1 time 0 < "$TTY_DEV" 2>/dev/null || stty raw -echo < "$TTY_DEV" 2>/dev/null
 
 		case "$KEY2$KEY3" in
 			"[A") echo "up" ;;
