@@ -27,7 +27,7 @@ show_menu() {
 pause_enter() {
 	echo
 	printf "Нажмите Enter, чтобы продолжить..."
-	read DUMMY
+	IFS= read -r DUMMY || return 0
 }
 
 show_leases() {
@@ -186,7 +186,11 @@ parse_query_line() {
 ask_show_unique() {
 	echo
 	printf "Вывести уникальные домены из сохраненного лога? [y/N]: "
-	read ANSWER
+	if ! IFS= read -r ANSWER; then
+		echo
+		return 0
+	fi
+
 	case "$ANSWER" in
 		y|Y|yes|YES|д|Д|да|Да|ДА)
 			show_unique
@@ -252,7 +256,11 @@ capture_stream() {
 capture_one() {
 	echo
 	printf "Введите IP клиента: "
-	read IP
+	if ! IFS= read -r IP; then
+		echo
+		echo "Ввод недоступен."
+		return 1
+	fi
 
 	if [ -z "$IP" ]; then
 		echo "IP не указан."
@@ -266,9 +274,18 @@ capture_one() {
 capture_two() {
 	echo
 	printf "Введите IP первого клиента: "
-	read IP_FIRST
+	if ! IFS= read -r IP_FIRST; then
+		echo
+		echo "Ввод недоступен."
+		return 1
+	fi
+
 	printf "Введите IP второго клиента: "
-	read IP_SECOND
+	if ! IFS= read -r IP_SECOND; then
+		echo
+		echo "Ввод недоступен."
+		return 1
+	fi
 
 	if [ -z "$IP_FIRST" ] || [ -z "$IP_SECOND" ]; then
 		echo "Один из IP не указан."
@@ -306,7 +323,11 @@ show_unique_by_ip() {
 	fi
 
 	printf "Введите IP клиента: "
-	read IP
+	if ! IFS= read -r IP; then
+		echo
+		echo "Ввод недоступен."
+		return 1
+	fi
 
 	if [ -z "$IP" ]; then
 		echo "IP не указан."
@@ -344,7 +365,13 @@ cleanup() {
 while :; do
 	show_menu
 	printf "Выберите пункт: "
-	read CHOICE
+	if ! IFS= read -r CHOICE; then
+		echo
+		echo "Ввод недоступен или stdin закрыт."
+		echo "Если запускали через wget pipe, обновите install.sh или запустите напрямую:"
+		echo "/root/podkop-domain-capture.sh"
+		exit 1
+	fi
 
 	case "$CHOICE" in
 		1)
