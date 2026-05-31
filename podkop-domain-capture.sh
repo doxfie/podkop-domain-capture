@@ -12,8 +12,6 @@ TTY_DEV="/dev/tty"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
-TTY_STATE=""
-TTY_CHANGED="0"
 MENU_CHOICE=""
 SELECTED_IPS=""
 SELECTED_LOG_IP=""
@@ -53,16 +51,10 @@ pause_enter() {
 }
 
 tui_start() {
-	TTY_STATE="$(stty -g < "$TTY_DEV" 2>/dev/null)"
-
-	if ! stty -echo -icanon min 1 time 0 < "$TTY_DEV" 2>/dev/null; then
-		if ! stty raw -echo < "$TTY_DEV" 2>/dev/null; then
-			echo "Ошибка: не удалось включить интерактивный режим терминала."
-			echo "Проверьте, что запуск идет из обычного SSH-терминала с доступным /dev/tty."
-			return 1
-		fi
+	if [ ! -r "$TTY_DEV" ]; then
+		echo "Ошибка: интерактивный терминал $TTY_DEV недоступен."
+		return 1
 	fi
-	TTY_CHANGED="1"
 
 	printf '\033[?25l'
 	trap 'tui_stop; echo; exit 130' INT TERM HUP
@@ -70,36 +62,47 @@ tui_start() {
 }
 
 tui_stop() {
-	if [ -n "$TTY_STATE" ]; then
-		if stty "$TTY_STATE" < "$TTY_DEV" 2>/dev/null; then
-			TTY_STATE=""
-			TTY_CHANGED="0"
-		fi
-	fi
-
-	if [ "$TTY_CHANGED" = "1" ]; then
-		stty sane < "$TTY_DEV" 2>/dev/null || stty echo icanon < "$TTY_DEV" 2>/dev/null
-		TTY_STATE=""
-		TTY_CHANGED="0"
-	fi
-
 	printf '\033[?25h'
 	trap - INT TERM HUP
 }
 
+read_char() {
+	READ_CHAR=""
+
+	if IFS= read -r -s -n 1 READ_CHAR < "$TTY_DEV" 2>/dev/null; then
+		return 0
+	fi
+
+	return 1
+}
+
 read_key() {
-	KEY1="$(dd bs=1 count=1 < "$TTY_DEV" 2>/dev/null)"
+	if ! read_char; then
+		echo "unsupported"
+		return
+	fi
+
+	KEY1="$READ_CHAR"
 
 	if [ "$KEY1" = "$ESC_CHAR" ]; then
-		stty -echo -icanon min 0 time 1 < "$TTY_DEV" 2>/dev/null || stty raw -echo < "$TTY_DEV" 2>/dev/null
-		KEY2="$(dd bs=1 count=1 < "$TTY_DEV" 2>/dev/null)"
-		KEY3="$(dd bs=1 count=1 < "$TTY_DEV" 2>/dev/null)"
-		stty -echo -icanon min 1 time 0 < "$TTY_DEV" 2>/dev/null || stty raw -echo < "$TTY_DEV" 2>/dev/null
+		if ! read_char; then
+			echo "other"
+			return
+		fi
+		KEY2="$READ_CHAR"
+
+		if ! read_char; then
+			echo "other"
+			return
+		fi
+		KEY3="$READ_CHAR"
 
 		case "$KEY2$KEY3" in
 			"[A") echo "up" ;;
 			"[B") echo "down" ;;
-			*) echo "quit" ;;
+			"OA") echo "up" ;;
+			"OB") echo "down" ;;
+			*) echo "other" ;;
 		esac
 		return
 	fi
@@ -111,6 +114,22 @@ read_key() {
 		q|Q) echo "quit" ;;
 		*) echo "other" ;;
 	esac
+}
+
+show_tui_unsupported() {
+	tui_stop
+	clear_screen
+	echo "Ошибка: эта сборка BusyBox ash не поддерживает read -s -n 1."
+	echo
+	echo "Без stty или read -n shell не может читать стрелки по одному нажатию."
+	echo "Для стрелочного меню нужен один из вариантов:"
+	echo "- BusyBox ash с поддержкой read -n/read -s;"
+	echo "- applet stty;"
+	echo "- внешний TUI-инструмент вроде dialog/whiptail."
+	echo
+	echo "Текущие ограничения проекта: без установки пакетов и без цифрового fallback."
+	echo "Поэтому на этой прошивке стрелочное меню может быть недоступно."
+	pause_enter
 }
 
 render_menu_line() {
@@ -196,6 +215,10 @@ select_main_menu() {
 				tui_stop
 				clear_screen
 				return 0
+				;;
+			unsupported)
+				show_tui_unsupported
+				return 1
 				;;
 		esac
 	done
@@ -451,6 +474,10 @@ select_capture_targets() {
 				tui_stop
 				clear_screen
 				return 0
+				;;
+			unsupported)
+				show_tui_unsupported
+				return 1
 				;;
 		esac
 	done
@@ -757,6 +784,10 @@ select_log_ip() {
 				tui_stop
 				clear_screen
 				return 2
+				;;
+			unsupported)
+				show_tui_unsupported
+				return 1
 				;;
 		esac
 	done

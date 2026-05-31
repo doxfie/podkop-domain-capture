@@ -110,6 +110,7 @@ daemon.info dnsmasq[1]: 711 192.168.1.132/51968 query[HTTPS] prodregistryv2.org 
 - OpenWrt;
 - `/bin/ash`;
 - BusyBox tools;
+- BusyBox `ash` с поддержкой `read -s -n 1` для стрелочного меню;
 - `awk`, `sort`, `grep`, `sed`;
 - `wget` для быстрой установки с GitHub.
 
