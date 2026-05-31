@@ -17,6 +17,7 @@ SELECTED_IPS=""
 SELECTED_LOG_IP=""
 CAPTURE_ALL_SELECTED="0"
 CAPTURE_MESSAGE=""
+LOGS_ENABLED="0"
 
 # Отключаем pathname expansion, чтобы домены/строки логов не раскрывались как glob.
 set -f
@@ -510,6 +511,7 @@ enable_logs() {
 	fi
 
 	echo "dnsmasq logqueries включен."
+	LOGS_ENABLED="1"
 	return 0
 }
 
@@ -531,7 +533,14 @@ disable_logs() {
 	fi
 
 	echo "dnsmasq logqueries выключен."
+	LOGS_ENABLED="0"
 	return 0
+}
+
+capture_cleanup() {
+	if [ "$LOGS_ENABLED" = "1" ]; then
+		disable_logs
+	fi
 }
 
 parse_query_line() {
@@ -614,8 +623,6 @@ capture_stream() {
 	echo "TIME     CLIENT_IP       DOMAIN"
 	echo "-------- --------------- ------------------------------"
 
-	trap 'echo; echo "Останавливаю live-сбор..."' INT
-
 	logread -f -e dnsmasq | while IFS= read -r LINE; do
 		if ! parse_query_line "$LINE"; then
 			continue
@@ -628,8 +635,6 @@ capture_stream() {
 		printf "%s %s %s\n" "$CAP_TIME" "$CAP_CLIENT" "$CAP_DOMAIN"
 		printf "%s %s %s\n" "$CAP_TIME" "$CAP_CLIENT" "$CAP_DOMAIN" >> "$LOG_FILE"
 	done
-
-	trap - INT
 
 	echo
 	echo "Сбор остановлен."
@@ -663,9 +668,15 @@ start_capture() {
 		pause_enter
 		return 1
 	fi
+
+	trap 'echo; echo "Останавливаю live-сбор..."; capture_cleanup' INT
+	trap 'capture_cleanup; exit 130' TERM HUP
+
 	capture_stream "$MODE" "$IP_LIST"
 	CAPTURE_RC="$?"
-	disable_logs
+
+	trap - INT TERM HUP
+	capture_cleanup
 	ask_show_unique
 	pause_enter
 	return "$CAPTURE_RC"
