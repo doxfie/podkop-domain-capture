@@ -10,6 +10,25 @@ LEASES_FILE="/tmp/dhcp.leases"
 # Отключаем pathname expansion, чтобы домены/строки логов не раскрывались как glob.
 set -f
 
+ensure_interactive_input() {
+	if [ -t 0 ]; then
+		return 0
+	fi
+
+	if [ -c /dev/tty ]; then
+		exec < /dev/tty
+		if [ -t 0 ]; then
+			return 0
+		fi
+	fi
+
+	echo "Интерактивный ввод недоступен."
+	echo "Не запускайте меню через pipe вида: wget -O - ... | sh"
+	echo "Запустите скрипт напрямую:"
+	echo "/root/podkop-domain-capture.sh"
+	exit 1
+}
+
 show_menu() {
 	echo
 	echo "=== Podkop Domain Capture ==="
@@ -361,6 +380,8 @@ cleanup() {
 		echo "Предупреждение: не удалось перезапустить log."
 	fi
 }
+
+ensure_interactive_input
 
 while :; do
 	show_menu

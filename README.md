@@ -9,10 +9,12 @@
 Подключитесь к роутеру по SSH и выполните:
 
 ```sh
-wget -O - https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/install.sh | sh
+wget -O /tmp/podkop-domain-capture-install.sh https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/install.sh && sh /tmp/podkop-domain-capture-install.sh
 ```
 
 Команда скачает скрипт в `/root/podkop-domain-capture.sh`, сделает его исполняемым и сразу запустит.
+
+Не запускайте интерактивный скрипт через `wget -O - ... | sh`: после pipe меню может остаться без stdin и начать повторяться.
 
 ## Альтернативный запуск без install.sh
 

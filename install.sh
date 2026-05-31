@@ -32,10 +32,14 @@ echo "Скрипт установлен: $TARGET"
 echo "Запускаю..."
 echo
 
-if [ -r /dev/tty ]; then
+if [ -t 0 ]; then
+	exec "$TARGET"
+fi
+
+if [ -c /dev/tty ]; then
 	exec "$TARGET" < /dev/tty
 fi
 
-echo "Не удалось подключить интерактивный ввод через /dev/tty."
+echo "Интерактивный ввод недоступен."
 echo "Запустите скрипт вручную:"
 echo "$TARGET"
