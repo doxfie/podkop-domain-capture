@@ -9,25 +9,29 @@
 Подключитесь к роутеру по SSH и выполните:
 
 ```sh
-wget -O /tmp/podkop-domain-capture-install.sh https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/install.sh && sh /tmp/podkop-domain-capture-install.sh
+wget -O /usr/bin/pdc https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/podkop-domain-capture.sh && chmod +x /usr/bin/pdc && pdc
 ```
 
-Команда скачает скрипт в `/root/podkop-domain-capture.sh`, сделает его исполняемым и сразу запустит.
-
-Не запускайте интерактивный скрипт через `wget -O - ... | sh`: после pipe меню может остаться без stdin и начать повторяться.
-
-## Альтернативный запуск без install.sh
-
-```sh
-wget -O /root/podkop-domain-capture.sh https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/podkop-domain-capture.sh
-chmod +x /root/podkop-domain-capture.sh
-/root/podkop-domain-capture.sh
-```
+Команда скачает скрипт в `/usr/bin/pdc`, сделает его исполняемым и сразу запустит.
 
 После установки повторный запуск:
 
 ```sh
-/root/podkop-domain-capture.sh
+pdc
+```
+
+Не запускайте интерактивный скрипт через `wget -O - ... | sh`: после pipe меню может остаться без stdin.
+
+## Альтернативный запуск через install.sh
+
+```sh
+wget -O - https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/install.sh | sh
+```
+
+Если запускали установщик через pipe и меню не открылось, запустите установленную команду вручную:
+
+```sh
+pdc
 ```
 
 ## Возможности

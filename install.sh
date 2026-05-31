@@ -1,10 +1,10 @@
 #!/bin/ash
 
 # Установщик Podkop Domain Capture для OpenWrt / BusyBox ash.
-# Скачивает основной скрипт в /root и сразу запускает его.
+# Скачивает основной скрипт в /usr/bin/pdc и сразу запускает его.
 
 SCRIPT_URL="${SCRIPT_URL:-https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/podkop-domain-capture.sh}"
-TARGET="${TARGET:-/root/podkop-domain-capture.sh}"
+TARGET="${TARGET:-/usr/bin/pdc}"
 
 echo "Podkop Domain Capture installer"
 echo "Скачиваю скрипт:"
@@ -29,6 +29,7 @@ fi
 
 echo
 echo "Скрипт установлен: $TARGET"
+echo "Повторный запуск: pdc"
 echo "Запускаю..."
 echo
 
@@ -42,4 +43,4 @@ fi
 
 echo "Интерактивный ввод недоступен."
 echo "Запустите скрипт вручную:"
-echo "$TARGET"
+echo "pdc"

@@ -12,6 +12,7 @@ LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
 TTY_STATE=""
+TTY_CHANGED="0"
 MENU_CHOICE=""
 SELECTED_IPS=""
 SELECTED_LOG_IP=""
@@ -36,7 +37,7 @@ ensure_interactive_input() {
 	echo "Интерактивный ввод недоступен."
 	echo "Не запускайте меню через pipe вида: wget -O - ... | sh"
 	echo "Запустите скрипт напрямую:"
-	echo "/root/podkop-domain-capture.sh"
+	echo "pdc"
 	exit 1
 }
 
@@ -52,15 +53,14 @@ pause_enter() {
 
 tui_start() {
 	TTY_STATE="$(stty -g 2>/dev/null)"
-	if [ -z "$TTY_STATE" ]; then
-		echo "Ошибка: не удалось получить настройки терминала."
-		return 1
-	fi
 
 	if ! stty -echo -icanon min 1 time 0 2>/dev/null; then
-		echo "Ошибка: не удалось включить интерактивный режим терминала."
-		return 1
+		if ! stty raw -echo 2>/dev/null; then
+			echo "Ошибка: не удалось включить интерактивный режим терминала."
+			return 1
+		fi
 	fi
+	TTY_CHANGED="1"
 
 	printf '\033[?25l'
 	trap 'tui_stop; echo; exit 130' INT TERM HUP
@@ -69,8 +69,16 @@ tui_start() {
 
 tui_stop() {
 	if [ -n "$TTY_STATE" ]; then
-		stty "$TTY_STATE" 2>/dev/null
+		if stty "$TTY_STATE" 2>/dev/null; then
+			TTY_STATE=""
+			TTY_CHANGED="0"
+		fi
+	fi
+
+	if [ "$TTY_CHANGED" = "1" ]; then
+		stty sane 2>/dev/null || stty echo icanon 2>/dev/null
 		TTY_STATE=""
+		TTY_CHANGED="0"
 	fi
 
 	printf '\033[?25h'
