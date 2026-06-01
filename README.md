@@ -24,6 +24,12 @@ wget -O /usr/bin/pdc https://raw.githubusercontent.com/doxfie/Podkop-Domain-Capt
 pdc
 ```
 
+Разовый запуск без установки команды `pdc`:
+
+```sh
+wget -O /tmp/pdc https://raw.githubusercontent.com/doxfie/Podkop-Domain-Capture/main/podkop-domain-capture.sh && sh /tmp/pdc
+```
+
 ---
 
 ## ✨ Возможности
