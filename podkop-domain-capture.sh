@@ -9,7 +9,7 @@ LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 TTY_DEV="/dev/tty"
-PDC_VERSION="0.2.2-beta"
+PDC_VERSION="0.2.3-beta"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
@@ -228,9 +228,9 @@ render_main_menu() {
 	fi
 
 	if [ "$1" -eq 4 ]; then
-		render_menu_line 1 "Отключить logqueries и очистить временные логи"
+		render_menu_line 1 "Сбросить временные логи"
 	else
-		render_menu_line 0 "Отключить logqueries и очистить временные логи"
+		render_menu_line 0 "Сбросить временные логи"
 	fi
 
 	if [ "$1" -eq 5 ]; then
@@ -923,10 +923,38 @@ show_unique_by_ip() {
 }
 
 cleanup() {
+	tui_header "Сброс временных логов" "Очистка сохраненного live-лога и служебных файлов"
+	tui_section "Будет выполнено"
+	echo "   Выключить dnsmasq logqueries, если он остался включен."
+	echo "   Удалить последний live-лог: $LOG_FILE"
+	echo "   Удалить служебные файлы pdc в /tmp."
+	echo "   Перезапустить RAM-log роутера."
 	echo
-	echo "Отключаю логирование и очищаю временные логи..."
+	tui_section "Не выполняется"
+	tui_message "   DNS-кеш на ПК/телефоне клиента этим пунктом не очищается."
+	echo
+	printf "%sy%s - сбросить, Enter/q - назад: " "$TUI_GREEN" "$TUI_RESET"
+	if ! IFS= read -r ANSWER < "$TTY_DEV"; then
+		echo
+		return 1
+	fi
 
-	disable_logs
+	case "$ANSWER" in
+		y|Y|yes|YES|д|Д|да|Да|ДА) ;;
+		*)
+			echo
+			echo "Сброс отменен."
+			return 0
+			;;
+	esac
+
+	echo
+	CURRENT_LOGQUERIES="$(uci -q get 'dhcp.@dnsmasq[0].logqueries' 2>/dev/null)"
+	if [ "$CURRENT_LOGQUERIES" = "1" ]; then
+		disable_logs
+	else
+		echo "dnsmasq logqueries уже выключен."
+	fi
 
 	rm -f "$LOG_FILE"
 	rm -f "$PREV_FILE"
@@ -939,9 +967,9 @@ cleanup() {
 	rm -f /tmp/*dns*.log
 	set -f
 
-	echo "Очищаю RAM-log..."
+	echo "Очищаю RAM-log роутера..."
 	if /etc/init.d/log restart; then
-		echo "Очистка завершена."
+		echo "Сброс временных логов завершен."
 	else
 		echo "Предупреждение: не удалось перезапустить log."
 	fi
