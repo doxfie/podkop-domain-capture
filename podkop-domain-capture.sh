@@ -9,7 +9,7 @@ LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 TTY_DEV="/dev/tty"
-PDC_VERSION="0.2.0-beta"
+PDC_VERSION="0.2.1-beta"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
@@ -607,6 +607,35 @@ capture_cleanup() {
 	fi
 }
 
+show_capture_tips() {
+	clear_screen
+	echo "Перед стартом сбора"
+	echo
+	echo "Чтобы браузер и ОС не брали домены из DNS-кеша:"
+	echo "- откройте проверяемый сайт в инкогнито/приватном окне;"
+	echo "- перед тестом сбросьте DNS-кеш на устройстве;"
+	echo "- если доменов мало, перезапустите браузер или Wi-Fi на устройстве."
+	echo
+	echo "Команды для сброса DNS-кеша:"
+	echo "Windows: ipconfig /flushdns"
+	echo "macOS:   sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
+	echo "Linux:   sudo resolvectl flush-caches"
+	echo
+	printf "Enter - начать сбор, q - назад: "
+	if ! IFS= read -r ANSWER; then
+		echo
+		return 1
+	fi
+
+	case "$ANSWER" in
+		q|Q)
+			return 1
+			;;
+	esac
+
+	return 0
+}
+
 parse_query_line() {
 	CAP_LINE="$1"
 	CAP_TIME=""
@@ -727,6 +756,10 @@ ask_show_unique() {
 start_capture() {
 	MODE="$1"
 	IP_LIST="$2"
+
+	if ! show_capture_tips; then
+		return 0
+	fi
 
 	if ! enable_logs; then
 		pause_enter

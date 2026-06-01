@@ -112,6 +112,19 @@ Podkop Domain Capture
 
 На экране `Собрать домены` скрипт показывает клиентов из `/tmp/dhcp.leases`. Можно выбрать одного или несколько клиентов, выбрать `Все клиенты`, а затем нажать `Начать сбор доменов`.
 
+Перед live-сбором скрипт показывает короткую подсказку: для чистого результата лучше открывать проверяемый сайт в инкогнито/приватном окне и сбросить DNS-кеш на устройстве. Примеры команд:
+
+```sh
+# Windows
+ipconfig /flushdns
+
+# macOS
+sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder
+
+# Linux/systemd
+sudo resolvectl flush-caches
+```
+
 ## Требования
 
 - OpenWrt;
