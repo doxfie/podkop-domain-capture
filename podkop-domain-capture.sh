@@ -9,7 +9,7 @@ LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 TTY_DEV="/dev/tty"
-PDC_VERSION="ui-v2.2"
+PDC_VERSION="0.2.0-beta"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
@@ -190,7 +190,7 @@ render_menu_line() {
 }
 
 render_client_table_header() {
-	printf '%s   %-3s %-15s %-36s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Name" "MAC" "Lease" "$TUI_RESET"
+	printf '%s   %-3s %-15s %-36s %-19s %s%s\n' "$TUI_DIM" "" "IP" "Name" "MAC" "Lease" "$TUI_RESET"
 }
 
 format_client_table_row() {
@@ -200,7 +200,7 @@ format_client_table_row() {
 	MAC="$4"
 	LEASE="$5"
 
-	printf '%s %-15s %-36.36s %-17s %s' "$CHECK" "$IP" "$HOST" "$MAC" "$LEASE"
+	printf '%s %-15s %-36.36s %-19s %s' "$CHECK" "$IP" "$HOST" "$MAC" "$LEASE"
 }
 
 render_main_menu() {
