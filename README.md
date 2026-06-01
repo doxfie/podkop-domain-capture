@@ -15,7 +15,7 @@
 Подключитесь к роутеру по SSH и выполните:
 
 ```sh
-wget -O /usr/bin/pdc https://raw.githubusercontent.com/doxfie/podkop-domain-capture/main/podkop-domain-capture.sh && chmod +x /usr/bin/pdc && pdc
+wget -O /usr/bin/pdc https://raw.githubusercontent.com/doxfie/Podkop-Domain-Capture/main/podkop-domain-capture.sh && chmod +x /usr/bin/pdc && pdc
 ```
 
 Повторный запуск:
