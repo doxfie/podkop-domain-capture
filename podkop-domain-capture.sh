@@ -9,7 +9,7 @@ LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 TTY_DEV="/dev/tty"
-PDC_VERSION="0.2.1-beta"
+PDC_VERSION="0.2.2-beta"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
@@ -20,7 +20,7 @@ CAPTURE_ALL_SELECTED="0"
 CAPTURE_MESSAGE=""
 LOGS_ENABLED="0"
 
-TUI_LINE="------------------------------------------------------------------------------------------------"
+TUI_LINE="---------------------------------------------------------"
 if [ -n "$NO_COLOR" ]; then
 	TUI_RESET=""
 	TUI_BOLD=""
@@ -608,21 +608,28 @@ capture_cleanup() {
 }
 
 show_capture_tips() {
-	clear_screen
-	echo "Перед стартом сбора"
+	tui_header "Перед стартом сбора" "Подготовьте клиентское устройство перед live-сбором"
+	tui_hint "Enter - начать сбор   q - назад"
 	echo
-	echo "Чтобы браузер и ОС не брали домены из DNS-кеша:"
-	echo "- откройте проверяемый сайт в инкогнито/приватном окне;"
-	echo "- перед тестом сбросьте DNS-кеш на устройстве;"
-	echo "- если доменов мало, перезапустите браузер или Wi-Fi на устройстве."
+
+	tui_section "Рекомендации"
+	echo "   Откройте проверяемый сайт в инкогнито/приватном окне."
+	echo "   Сбросьте DNS-кеш на устройстве, с которого открываете сайт."
+	echo "   Если доменов мало, перезапустите браузер или Wi-Fi на устройстве."
 	echo
-	echo "Команды для сброса DNS-кеша:"
-	echo "Windows: ipconfig /flushdns"
-	echo "macOS:   sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
-	echo "Linux:   sudo resolvectl flush-caches"
+
+	tui_section "Где выполнять команды"
+	tui_message "   Выполняйте их на ПК/телефоне клиента, не в этом SSH-терминале роутера."
 	echo
-	printf "Enter - начать сбор, q - назад: "
-	if ! IFS= read -r ANSWER; then
+
+	tui_section "DNS-кеш на клиенте"
+	echo "   Windows CMD/PowerShell: ipconfig /flushdns"
+	echo "   macOS Terminal:         sudo dscacheutil -flushcache; sudo killall -HUP mDNSResponder"
+	echo "   Linux terminal:         sudo resolvectl flush-caches"
+	echo "   iOS/Android:            включите/выключите авиарежим или перезапустите Wi-Fi"
+	echo
+	printf "%sEnter%s - начать сбор, %sq%s - назад: " "$TUI_GREEN" "$TUI_RESET" "$TUI_GREEN" "$TUI_RESET"
+	if ! IFS= read -r ANSWER < "$TTY_DEV"; then
 		echo
 		return 1
 	fi
