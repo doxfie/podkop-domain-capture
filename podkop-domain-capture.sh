@@ -9,6 +9,7 @@ LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 TTY_DEV="/dev/tty"
+PDC_VERSION="ui-v2.2"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"
@@ -158,7 +159,7 @@ tui_header() {
 
 	clear_screen
 	printf '%s%s%s\n' "$TUI_CYAN" "$TUI_LINE" "$TUI_RESET"
-	printf '%s%s%s%s\n' "$TUI_BOLD" "$TUI_GREEN" "$TITLE" "$TUI_RESET"
+	printf '%s%s%s %s[%s]%s\n' "$TUI_BOLD" "$TUI_GREEN" "$TITLE" "$TUI_DIM" "$PDC_VERSION" "$TUI_RESET"
 	if [ -n "$SUBTITLE" ]; then
 		printf '%s%s%s\n' "$TUI_DIM" "$SUBTITLE" "$TUI_RESET"
 	fi
