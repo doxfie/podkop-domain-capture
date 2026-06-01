@@ -19,7 +19,7 @@ CAPTURE_ALL_SELECTED="0"
 CAPTURE_MESSAGE=""
 LOGS_ENABLED="0"
 
-TUI_LINE="--------------------------------------------------------------------------"
+TUI_LINE="------------------------------------------------------------------------------------------------"
 if [ -n "$NO_COLOR" ]; then
 	TUI_RESET=""
 	TUI_BOLD=""
@@ -189,7 +189,7 @@ render_menu_line() {
 }
 
 render_client_table_header() {
-	printf '%s   %-3s %-15s %-22s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Имя" "MAC" "Lease" "$TUI_RESET"
+	printf '%s   %-3s %-15s %-36s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Имя" "MAC" "Lease" "$TUI_RESET"
 }
 
 format_client_table_row() {
@@ -199,7 +199,7 @@ format_client_table_row() {
 	MAC="$4"
 	LEASE="$5"
 
-	printf '%s %-15s %-22.22s %-17s %s' "$CHECK" "$IP" "$HOST" "$MAC" "$LEASE"
+	printf '%s %-15s %-36.36s %-17s %s' "$CHECK" "$IP" "$HOST" "$MAC" "$LEASE"
 }
 
 render_main_menu() {
