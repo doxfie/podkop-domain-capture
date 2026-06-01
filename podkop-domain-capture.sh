@@ -188,6 +188,20 @@ render_menu_line() {
 	fi
 }
 
+render_client_table_header() {
+	printf '%s   %-3s %-15s %-22s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Имя" "MAC" "Lease" "$TUI_RESET"
+}
+
+format_client_table_row() {
+	CHECK="$1"
+	IP="$2"
+	HOST="$3"
+	MAC="$4"
+	LEASE="$5"
+
+	printf '%s %-15s %-22.22s %-17s %s' "$CHECK" "$IP" "$HOST" "$MAC" "$LEASE"
+}
+
 render_main_menu() {
 	tui_header "Podkop Domain Capture" "Сбор DNS-доменов из dnsmasq logs для Podkop"
 	tui_hint "Стрелки вверх/вниз - выбор   Enter - открыть   q - выход"
@@ -401,7 +415,7 @@ render_capture_menu() {
 	fi
 
 	if [ "$CLIENT_TOTAL" -gt 0 ]; then
-		printf '%s   %-3s %-15s %-18s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Имя" "MAC" "Lease" "$TUI_RESET"
+		render_client_table_header
 	fi
 
 	I="1"
@@ -415,7 +429,7 @@ render_capture_menu() {
 			CHECK="[ ]"
 		fi
 
-		DISPLAY="$(printf '%s %-15s %-18s %-17s %s' "$CHECK" "$CLIENT_IP" "$CLIENT_HOST" "$CLIENT_MAC" "$CLIENT_REMAINING")"
+		DISPLAY="$(format_client_table_row "$CHECK" "$CLIENT_IP" "$CLIENT_HOST" "$CLIENT_MAC" "$CLIENT_REMAINING")"
 		ROW_INDEX=$((I + 1))
 
 		if [ "$CAPTURE_INDEX" -eq "$ROW_INDEX" ]; then
