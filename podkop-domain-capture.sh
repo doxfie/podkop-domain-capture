@@ -189,7 +189,7 @@ render_menu_line() {
 }
 
 render_client_table_header() {
-	printf '%s   %-3s %-15s %-36s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Имя" "MAC" "Lease" "$TUI_RESET"
+	printf '%s   %-3s %-15s %-36s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Name" "MAC" "Lease" "$TUI_RESET"
 }
 
 format_client_table_row() {
