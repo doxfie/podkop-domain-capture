@@ -9,7 +9,7 @@ LEASES_FILE="/tmp/dhcp.leases"
 CLIENTS_FILE="/tmp/podkop-domain-capture.clients"
 LOG_IPS_FILE="/tmp/podkop-domain-capture.log-ips"
 TTY_DEV="/dev/tty"
-PDC_VERSION="0.2.3-beta"
+PDC_VERSION="0.1.0-beta"
 
 ESC_CHAR="$(printf '\033')"
 CR_CHAR="$(printf '\r')"

@@ -2,7 +2,7 @@
 
 ![OpenWrt](https://img.shields.io/badge/OpenWrt-BusyBox%20ash-00B5E2)
 ![Dependencies](https://img.shields.io/badge/dependencies-0-brightgreen)
-![Version](https://img.shields.io/badge/version-0.2.3--beta-blue)
+![Version](https://img.shields.io/badge/version-0.1.0--beta-blue)
 
 Короткая SSH-утилита для OpenWrt: ловит DNS-домены из `dnsmasq` logs и помогает собрать список доменов для добавления в Podkop.
 
@@ -40,7 +40,7 @@ pdc
 
 ```text
 ---------------------------------------------------------
-Podkop Domain Capture [0.2.3-beta]
+Podkop Domain Capture [0.1.0-beta]
 Сбор DNS-доменов из dnsmasq logs для Podkop
 ---------------------------------------------------------
 
