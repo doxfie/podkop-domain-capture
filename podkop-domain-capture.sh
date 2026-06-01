@@ -19,6 +19,25 @@ CAPTURE_ALL_SELECTED="0"
 CAPTURE_MESSAGE=""
 LOGS_ENABLED="0"
 
+TUI_LINE="--------------------------------------------------------------------------"
+if [ -n "$NO_COLOR" ]; then
+	TUI_RESET=""
+	TUI_BOLD=""
+	TUI_DIM=""
+	TUI_GREEN=""
+	TUI_CYAN=""
+	TUI_YELLOW=""
+	TUI_SELECTED=""
+else
+	TUI_RESET="$(printf '\033[0m')"
+	TUI_BOLD="$(printf '\033[1m')"
+	TUI_DIM="$(printf '\033[2m')"
+	TUI_GREEN="$(printf '\033[32m')"
+	TUI_CYAN="$(printf '\033[36m')"
+	TUI_YELLOW="$(printf '\033[33m')"
+	TUI_SELECTED="$(printf '\033[1;30;42m')"
+fi
+
 # Отключаем pathname expansion, чтобы домены/строки логов не раскрывались как glob.
 set -f
 
@@ -133,23 +152,48 @@ show_tui_unsupported() {
 	pause_enter
 }
 
+tui_header() {
+	TITLE="$1"
+	SUBTITLE="$2"
+
+	clear_screen
+	printf '%s%s%s\n' "$TUI_CYAN" "$TUI_LINE" "$TUI_RESET"
+	printf '%s%s%s%s\n' "$TUI_BOLD" "$TUI_GREEN" "$TITLE" "$TUI_RESET"
+	if [ -n "$SUBTITLE" ]; then
+		printf '%s%s%s\n' "$TUI_DIM" "$SUBTITLE" "$TUI_RESET"
+	fi
+	printf '%s%s%s\n\n' "$TUI_CYAN" "$TUI_LINE" "$TUI_RESET"
+}
+
+tui_hint() {
+	printf '%s%s%s\n' "$TUI_DIM" "$1" "$TUI_RESET"
+}
+
+tui_section() {
+	printf '%s%s%s\n' "$TUI_CYAN" "$1" "$TUI_RESET"
+}
+
+tui_message() {
+	printf '%s%s%s\n' "$TUI_YELLOW" "$1" "$TUI_RESET"
+}
+
 render_menu_line() {
 	CURRENT="$1"
 	TEXT="$2"
 
 	if [ "$CURRENT" = "1" ]; then
-		printf '\033[7m> %s\033[0m\n' "$TEXT"
+		printf '%s > %s %s\n' "$TUI_SELECTED" "$TEXT" "$TUI_RESET"
 	else
-		printf '  %s\n' "$TEXT"
+		printf '   %s\n' "$TEXT"
 	fi
 }
 
 render_main_menu() {
-	clear_screen
-	echo "=== Podkop Domain Capture ==="
-	echo "Стрелки вверх/вниз - выбор, Enter - открыть, q - выход"
+	tui_header "Podkop Domain Capture" "Сбор DNS-доменов из dnsmasq logs для Podkop"
+	tui_hint "Стрелки вверх/вниз - выбор   Enter - открыть   q - выход"
 	echo
 
+	tui_section "Действия"
 	if [ "$1" -eq 1 ]; then
 		render_menu_line 1 "Собрать домены"
 	else
@@ -334,16 +378,16 @@ render_capture_menu() {
 	START_INDEX=$((CLIENT_TOTAL + 2))
 	BACK_INDEX=$((CLIENT_TOTAL + 3))
 
-	clear_screen
-	echo "=== Сбор доменов ==="
-	echo "Стрелки - выбор, Space/Enter - отметить клиента, Enter на действии - подтвердить, q - назад"
+	tui_header "Сбор доменов" "Выберите клиентов, от которых нужно поймать DNS-запросы"
+	tui_hint "Стрелки - выбор   Space/Enter - отметить   Enter на действии - подтвердить   q - назад"
 	echo
 
 	if [ "$CLIENT_TOTAL" -eq 0 ]; then
-		echo "DHCP leases не найдены или пусты. Можно выбрать сбор от всех клиентов."
+		tui_message "DHCP leases не найдены или пусты. Можно выбрать сбор от всех клиентов."
 		echo
 	fi
 
+	tui_section "Клиенты"
 	if [ "$CAPTURE_ALL_SELECTED" = "1" ]; then
 		CHECK="[x]"
 	else
@@ -354,6 +398,10 @@ render_capture_menu() {
 		render_menu_line 1 "$CHECK Все клиенты"
 	else
 		render_menu_line 0 "$CHECK Все клиенты"
+	fi
+
+	if [ "$CLIENT_TOTAL" -gt 0 ]; then
+		printf '%s   %-3s %-15s %-18s %-17s %s%s\n' "$TUI_DIM" "" "IP" "Имя" "MAC" "Lease" "$TUI_RESET"
 	fi
 
 	I="1"
@@ -367,7 +415,7 @@ render_capture_menu() {
 			CHECK="[ ]"
 		fi
 
-		DISPLAY="$CHECK $CLIENT_IP  $CLIENT_HOST  $CLIENT_MAC  $CLIENT_REMAINING"
+		DISPLAY="$(printf '%s %-15s %-18s %-17s %s' "$CHECK" "$CLIENT_IP" "$CLIENT_HOST" "$CLIENT_MAC" "$CLIENT_REMAINING")"
 		ROW_INDEX=$((I + 1))
 
 		if [ "$CAPTURE_INDEX" -eq "$ROW_INDEX" ]; then
@@ -380,6 +428,7 @@ render_capture_menu() {
 	done
 
 	echo
+	tui_section "Действия"
 	if [ "$CAPTURE_INDEX" -eq "$START_INDEX" ]; then
 		render_menu_line 1 "Начать сбор доменов"
 	else
@@ -394,7 +443,7 @@ render_capture_menu() {
 
 	if [ -n "$CAPTURE_MESSAGE" ]; then
 		echo
-		echo "$CAPTURE_MESSAGE"
+		tui_message "$CAPTURE_MESSAGE"
 	fi
 }
 
@@ -718,11 +767,11 @@ render_log_ip_menu() {
 	LOG_IP_TOTAL="$2"
 	LOG_IP_BACK=$((LOG_IP_TOTAL + 1))
 
-	clear_screen
-	echo "=== Домены по клиенту ==="
-	echo "Стрелки - выбор, Enter - показать, q - назад"
+	tui_header "Домены по клиенту" "Выберите IP из последнего сохраненного лога"
+	tui_hint "Стрелки - выбор   Enter - показать   q - назад"
 	echo
 
+	tui_section "Клиенты из лога"
 	I="1"
 	while [ "$I" -le "$LOG_IP_TOTAL" ]; do
 		LOG_IP="$(get_log_ip "$I")"
@@ -735,6 +784,7 @@ render_log_ip_menu() {
 	done
 
 	echo
+	tui_section "Действия"
 	if [ "$LOG_IP_INDEX" -eq "$LOG_IP_BACK" ]; then
 		render_menu_line 1 "Назад"
 	else
